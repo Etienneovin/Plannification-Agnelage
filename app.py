@@ -2,71 +2,93 @@ import streamlit as st
 from datetime import timedelta, datetime
 import pandas as pd
 
-# Interface et Style
-st.set_page_config(page_title="Agnel'Plan Pro", page_icon="🐏", layout="centered")
+st.set_page_config(page_title="Agnel'Plan Pro", page_icon="🐑")
 
 st.title("🐑 Agnel'Plan")
-st.markdown("### L'outil de planification pour éleveurs ovins")
-st.write("Entrez vos dates de lutte pour générer votre calendrier de suivi.")
+st.write("Personnalisez vos protocoles et générez votre planning.")
 
-# Formulaire de saisie
-with st.expander("⚙️ Configuration du Lot", expanded=True):
-    col1, col2 = st.columns(2)
-    with col1:
-        nom_lot = st.text_input("Nom du lot", value="Lot Printemps 2026")
-        nb_cycles = st.number_input("Nombre de cycles de lutte", min_value=1, max_value=5, value=2, help="1 cycle = 16 jours")
-    with col2:
-        date_debut = st.date_input("Date de début de lutte", datetime.now())
-        format_date = "%d/%m/%Y"
+# --- 1. CONFIGURATION DE BASE ---
+with st.sidebar:
+    st.header("1. Paramètres du Lot")
+    nom_lot = st.text_input("Nom du lot", value="Lot Printemps")
+    date_debut_lutte = st.date_input("Début de lutte", datetime.now())
+    nb_cycles = st.number_input("Nombre de cycles (16j)", min_value=1, value=2)
+    
+    st.divider()
+    
+    # --- 2. MENU OPTIONS PERSONNALISÉES ---
+    st.header("2. Options du protocole")
+    st.write("Réglez les dates par rapport à la mise bas :")
+    
+    d_echo = st.slider("Écho (jours après fin lutte)", 30, 90, 45)
+    d_flush = st.slider("Flushing (jours avant mise bas)", 7, 40, 20)
+    d_vaccin = st.slider("Vaccin / Rappel (jours avant mise bas)", 0, 60, 30)
+    d_sevrage = st.slider("Sevrage (jours après mise bas)", 40, 120, 70)
+    d_vente = st.slider("Vente (jours après mise bas)", 60, 200, 90)
 
-# --- CALCULS LOGIQUES ---
+# --- 3. CALCULS LOGIQUES ---
+# Dates de lutte
 duree_lutte = nb_cycles * 16
-date_fin_lutte = date_debut + timedelta(days=duree_lutte)
-date_echo = date_fin_lutte + timedelta(days=45)
-date_mise_bas_debut = date_debut + timedelta(days=147)
-date_flushing = date_mise_bas_debut - timedelta(days=20)
-date_sevrage = date_mise_bas_debut + timedelta(days=70)
-date_vente = date_mise_bas_debut + timedelta(days=90)
+date_fin_lutte = date_debut_lutte + timedelta(days=duree_lutte)
 
-# --- AFFICHAGE ---
-st.info(f"📅 **Récapitulatif pour le {nom_lot}**")
+# Dates clés basées sur les sliders
+date_echo = date_fin_lutte + timedelta(days=d_echo)
+date_mb_debut = date_debut_lutte + timedelta(days=147)
+date_mb_fin = date_fin_lutte + timedelta(days=152)
 
-planning = [
-    {"Événement": "🚀 Début de lutte", "Date": date_debut, "Note": "Mise en lot avec les béliers"},
-    {"Événement": "🛑 Fin de lutte", "Date": date_fin_lutte, "Note": "Retrait des béliers"},
-    {"Événement": "🩺 Diagnostic gestation", "Date": date_echo, "Note": "Échographie (Fin lutte + 45j)"},
-    {"Événement": "🌾 Début Flushing", "Date": date_flushing, "Note": "Boost alimentaire 20j avant mise bas"},
-    {"Événement": "🐣 Début Mise bas", "Date": date_mise_bas_debut, "Note": "Surveillance accrue (J+147)"},
-    {"Événement": "🍼 Sevrage", "Date": date_sevrage, "Note": "Séparation mères/agneaux (J+70)"},
-    {"Événement": "💰 Vente agneaux", "Date": date_vente, "Note": "Début de la période de vente (J+90)"},
+date_flushing = date_mb_debut - timedelta(days=d_flush)
+date_vaccin = date_mb_debut - timedelta(days=d_vaccin)
+date_sevrage = date_mb_debut + timedelta(days=d_sevrage)
+date_vente = date_mb_debut + timedelta(days=d_vente)
+
+# --- 4. AFFICHAGE DES RÉSULTATS ---
+st.subheader(f"Planning : {nom_lot}")
+
+# Création d'un tableau propre pour l'affichage
+data = [
+    ["Lutte (Période)", f"Du {date_debut_lutte.strftime('%d/%m')} au {date_fin_lutte.strftime('%d/%m')}"],
+    ["Échographie", date_echo.strftime('%d/%m/%y')],
+    ["Vaccination", date_vaccin.strftime('%d/%m/%y')],
+    ["Flushing", date_flushing.strftime('%d/%m/%y')],
+    ["Mise bas (Période)", f"Du {date_mb_debut.strftime('%d/%m')} au {date_mb_fin.strftime('%d/%m')}"],
+    ["Sevrage", date_sevrage.strftime('%d/%m/%y')],
+    ["Vente", date_vente.strftime('%d/%m/%y')],
 ]
+df_display = pd.DataFrame(data, columns=["Événement", "Date / Période"])
+st.table(df_display)
 
-df = pd.DataFrame(planning)
-df['Date'] = df['Date'].apply(lambda x: x.strftime('%d/%b/%Y'))
-st.table(df)
-
-# --- GÉNÉRATION DU FICHIER CALENDRIER ---
+# --- 5. LOGIQUE DU FICHIER ICS ---
 def create_ics():
     ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//AgnelPlan//FR"]
-    for item in planning:
-        d = datetime.strptime(df.loc[df['Événement'] == item['Événement'], 'Date'].values[0], '%d/%b/%Y')
-        d_str = d.strftime("%Y%m%d")
+    
+    # Fonction pour ajouter un événement
+    def add_event(summary, start, end=None):
         ics.append("BEGIN:VEVENT")
-        ics.append(f"SUMMARY:{nom_lot} - {item['Événement']}")
-        ics.append(f"DESCRIPTION:{item['Note']}")
-        ics.append(f"DTSTART;VALUE=DATE:{d_str}")
-        ics.append(f"DTEND;VALUE=DATE:{d_str}")
+        ics.append(f"SUMMARY:{summary} ({nom_lot})")
+        ics.append(f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}")
+        if end:
+            ics.append(f"DTEND;VALUE=DATE:{(end + timedelta(days=1)).strftime('%Y%m%d')}")
+        else:
+            ics.append(f"DTEND;VALUE=DATE:{(start + timedelta(days=1)).strftime('%Y%m%d')}")
         ics.append("END:VEVENT")
+
+    # Ajout des événements
+    add_event("LUTTE", date_debut_lutte, date_fin_lutte)
+    add_event("MISE BAS", date_mb_debut, date_mb_fin)
+    add_event("Échographie", date_echo)
+    add_event("Vaccination", date_vaccin)
+    add_event("Flushing", date_flushing)
+    add_event("Sevrage", date_sevrage)
+    add_event("Vente agneaux", date_vente)
+    
     ics.append("END:VCALENDAR")
     return "\n".join(ics)
 
+# Bouton de téléchargement
 st.download_button(
-    label="📲 Télécharger pour mon Agenda (Google/iPhone)",
+    label="📲 Exporter vers mon Agenda",
     data=create_ics(),
-    file_name=f"Planning_{nom_lot}.ics",
+    file_name=f"AgnelPlan_{nom_lot}.ics",
     mime="text/calendar",
     use_container_width=True
 )
-
-st.markdown("---")
-st.caption("Outil créé pour les éleveurs. Partagez ce lien avec vos collègues !")
