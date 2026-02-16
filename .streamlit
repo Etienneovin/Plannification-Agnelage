@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#2E7D32"          # Vert agricole
+backgroundColor = "#F1F8E9"       # Gris-vert très clair pour le fond
+secondaryBackgroundColor = "#C8E6C9" # Vert clair pour les encadrés
+textColor = "#1B5E20"             # Texte vert foncé
+font = "sans serif"
