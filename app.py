@@ -2,118 +2,111 @@ import streamlit as st
 from datetime import timedelta, datetime
 import pandas as pd
 
-# Configuration de la page
-st.set_page_config(page_title="Agnel'Plan Pro", page_icon="🐑", layout="centered")
+# 1. CONFIGURATION & STYLE VINTAGE
+st.set_page_config(page_title="Agnel'Plan", page_icon="🐑", layout="centered")
 
-st.title("🐑 Agnel'Plan")
-st.write("Planifiez vos lots et ajoutez vos propres étapes personnalisées.")
+st.markdown("""
+    <style>
+    .stApp { background-color: #FDFBF7; }
+    h1, h2, h3, p, span, label { color: #4A3728 !important; font-family: 'Georgia', serif; }
+    .stButton>button { 
+        background-color: #4A3728; color: #FDFBF7; border-radius: 4px; 
+        border: 1px solid #4A3728; font-weight: bold; width: 100%;
+    }
+    .stButton>button:hover { background-color: #634a36; color: #FDFBF7; }
+    div[data-baseweb="input"] { background-color: #FFF; border: 1px solid #D1C4B9; }
+    .stDataFrame { border: 1px solid #4A3728; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 1. PARAMÈTRES DU LOT ---
-st.subheader("📋 Configuration du Lot")
-with st.container(border=True):
-    col1, col2 = st.columns(2)
-    with col1:
-        nom_lot = st.text_input("Nom du lot", value="Lot Printemps")
-        date_debut_lutte = st.date_input("Date de début de lutte", datetime.now())
-    with col2:
-        nb_cycles = st.number_input("Nombre de cycles (16 jours/cycle)", min_value=1, value=2)
-        st.caption(f"Durée totale de lutte : {nb_cycles * 16} jours")
+# EN-TÊTE
+col_a, col_b = st.columns([1, 5])
+with col_a:
+    st.write("# 🐑")
+with col_b:
+    st.title("Agnel'Plan")
+    st.write("*Carnet de bergerie digital*")
 
-# --- 2. RÉGLAGES STANDARDS ---
-with st.expander("⚙️ Réglages des étapes classiques (jours)"):
-    c1, c2 = st.columns(2)
-    with c1:
-        d_echo = st.number_input("Écho (J+ fin lutte)", value=45)
-        d_sevrage = st.number_input("Sevrage (J+ début MB)", value=70)
-    with c2:
-        d_flush = st.number_input("Flushing (J- début MB)", value=20)
-        d_vente = st.number_input("Vente (J+ début MB)", value=90)
+# 2. SAISIE DU LOT
+with st.container():
+    c1, c2, c3 = st.columns([2, 2, 1])
+    nom_lot = c1.text_input("Nom du lot", value="Lot 1")
+    date_debut = c2.date_input("Début lutte", datetime.now())
+    cycles = c3.number_input("Cycles", min_value=1, value=2)
 
-# --- 3. ÉVÉNEMENTS PERSONNALISÉS ---
-st.subheader("➕ Événements supplémentaires")
-if 'custom_events' not in st.session_state:
-    st.session_state.custom_events = []
+# 3. OPTIONS & PERSONNALISATION
+with st.expander("⚙️ Réglages & Événements personnalisés"):
+    col_opt1, col_opt2 = st.columns(2)
+    d_echo = col_opt1.number_input("Écho (J+ fin)", value=45)
+    d_flush = col_opt1.number_input("Flushing (J- début MB)", value=20)
+    d_sevrage = col_opt2.number_input("Sevrage (J+ début MB)", value=70)
+    d_vente = col_opt2.number_input("Vente (J+ début MB)", value=90)
+    
+    st.divider()
+    c_nom = st.text_input("Ajouter une note (ex: Tonte)")
+    cx1, cx2, cx3 = st.columns([2,1,1])
+    c_ref = cx1.selectbox("Réf.", ["Avant MB", "Après MB"])
+    c_jours = cx2.number_input("Jours", value=10)
+    add_btn = cx3.button("Ajouter")
 
-with st.container(border=True):
-    c_name = st.text_input("Nom de votre événement (ex: Tonte, Vermifuge...)")
-    c_col1, c_col2, c_col3 = st.columns([2, 1, 1])
-    with c_col1:
-        c_ref = st.selectbox("Référence", ["Avant mise bas", "Après mise bas"])
-    with c_col2:
-        c_days = st.number_input("Jours", min_value=0, value=10)
-    with c_col3:
-        st.write("") # Espacement
-        st.write("")
-        if st.button("Ajouter"):
-            if c_name:
-                st.session_state.custom_events.append({"nom": c_name, "ref": c_ref, "jours": c_days})
-                st.rerun()
+# Gestion des événements personnalisés
+if 'customs' not in st.session_state:
+    st.session_state.customs = []
+if add_btn and c_nom:
+    st.session_state.customs.append({"nom": c_nom, "ref": c_ref, "jours": c_jours})
 
-# Affichage et suppression des événements personnalisés
-if st.session_state.custom_events:
-    for i, ev in enumerate(st.session_state.custom_events):
-        st.info(f"**{ev['nom']}** : {ev['jours']} jours {ev['ref'].lower()}")
-        if st.button(f"Supprimer {i}", key=f"del_{i}"):
-            st.session_state.custom_events.pop(i)
-            st.rerun()
+# 4. CALCULS
+d_lutte = cycles * 16
+date_fin_l = date_debut + timedelta(days=d_lutte)
+date_mb_deb = date_debut + timedelta(days=147)
+date_mb_fin = date_fin_l + timedelta(days=152)
 
-# --- 4. CALCULS ---
-duree_lutte = nb_cycles * 16
-date_fin_lutte = date_debut_lutte + timedelta(days=duree_lutte)
-date_mb_debut = date_debut_lutte + timedelta(days=147)
-date_mb_fin = date_fin_lutte + timedelta(days=152)
-
-# Événements standards
-date_echo = date_fin_lutte + timedelta(days=d_echo)
-date_flushing = date_mb_debut - timedelta(days=d_flush)
-date_sevrage = date_mb_debut + timedelta(days=d_sevrage)
-date_vente = date_mb_debut + timedelta(days=d_vente)
-
-# Préparation du tableau final
-planning_data = [
-    {"Événement": "🚀 Période de Lutte", "Date": f"Du {date_debut_lutte.strftime('%d/%m/%Y')} au {date_fin_lutte.strftime('%d/%m/%Y')}", "obj": (date_debut_lutte, date_fin_lutte)},
-    {"Événement": "🩺 Diagnostic gestation", "Date": date_echo.strftime('%d/%m/%Y'), "obj": date_echo},
-    {"Événement": "🌾 Début Flushing", "Date": date_flushing.strftime('%d/%m/%Y'), "obj": date_flushing},
-    {"Événement": "🐣 Période de Mise bas", "Date": f"Du {date_mb_debut.strftime('%d/%m/%Y')} au {date_mb_fin.strftime('%d/%m/%Y')}", "obj": (date_mb_debut, date_mb_fin)},
-    {"Événement": "🍼 Sevrage", "Date": date_sevrage.strftime('%d/%m/%Y'), "obj": date_sevrage},
-    {"Événement": "💰 Vente agneaux", "Date": date_vente.strftime('%d/%m/%Y'), "obj": date_vente},
+# Préparation de la liste d'événements
+plan = [
+    {"label": "🚀 Lutte", "start": date_debut, "end": date_fin_l},
+    {"label": "🩺 Échographie", "start": date_fin_l + timedelta(days=d_echo)},
+    {"label": "🌾 Flushing", "start": date_mb_deb - timedelta(days=d_flush)},
+    {"label": "✨ Mises bas", "start": date_mb_deb, "end": date_mb_fin},
+    {"label": "🍼 Sevrage", "start": date_mb_deb + timedelta(days=d_sevrage)},
+    {"label": "💰 Vente", "start": date_mb_deb + timedelta(days=d_vente)},
 ]
 
-# Ajout des personnalisés aux calculs
-for ev in st.session_state.custom_events:
-    if ev['ref'] == "Avant mise bas":
-        d_ev = date_mb_debut - timedelta(days=ev['jours'])
-    else:
-        d_ev = date_mb_debut + timedelta(days=ev['jours'])
-    planning_data.append({"Événement": f"⭐ {ev['nom']}", "Date": d_ev.strftime('%d/%m/%Y'), "obj": d_ev})
+for ev in st.session_state.customs:
+    d_ev = date_mb_deb - timedelta(days=ev['jours']) if ev['ref'] == "Avant MB" else date_mb_deb + timedelta(days=ev['jours'])
+    plan.append({"label": f"⭐ {ev['nom']}", "start": d_ev})
 
-# --- 5. AFFICHAGE ET EXPORT ---
-st.divider()
-st.subheader(f"📅 Planning : {nom_lot}")
-df_display = pd.DataFrame([{"Événement": x["Événement"], "Date": x["Date"]} for x in planning_data])
-st.table(df_display)
+# 5. AFFICHAGE STYLE ÉPURÉ
+st.write("### 📅 Planning")
+df_view = []
+for p in plan:
+    date_str = f"{p['start'].strftime('%d/%m/%Y')}"
+    if 'end' in p:
+        date_str = f"Du {p['start'].strftime('%d/%m')} au {p['end'].strftime('%d/%m/%Y')}"
+    df_view.append({"Action": p['label'], "Date": date_str})
 
+st.table(pd.DataFrame(df_view))
+
+# 6. GÉNÉRATEUR DE FICHIER ICS
 def create_ics():
     ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//AgnelPlan//FR", "CALSCALE:GREGORIAN"]
-    for item in planning_data:
+    for p in plan:
         ics.append("BEGIN:VEVENT")
-        ics.append(f"SUMMARY:{item['Événement']} - {nom_lot}")
-        if isinstance(item['obj'], tuple): # Si c'est une période (Lutte/MB)
-            start, end = item['obj']
-            ics.append(f"DTSTART;VALUE=DATE:{start.strftime('%Y%m%d')}")
-            ics.append(f"DTEND;VALUE=DATE:{(end + timedelta(days=1)).strftime('%Y%m%d')}")
-        else: # Si c'est une date unique
-            ics.append(f"DTSTART;VALUE=DATE:{item['obj'].strftime('%Y%m%d')}")
-            ics.append(f"DTEND;VALUE=DATE:{(item['obj'] + timedelta(days=1)).strftime('%Y%m%d')}")
+        ics.append(f"SUMMARY:{p['label']} ({nom_lot})")
+        ics.append(f"DTSTART;VALUE=DATE:{p['start'].strftime('%Y%m%d')}")
+        end_dt = p.get('end', p['start']) + timedelta(days=1)
+        ics.append(f"DTEND;VALUE=DATE:{end_dt.strftime('%Y%m%d')}")
         ics.append("END:VEVENT")
     ics.append("END:VCALENDAR")
     return "\n".join(ics)
 
 st.download_button(
-    label="📲 Exporter vers mon Agenda",
+    label="📲 Enregistrer dans l'agenda",
     data=create_ics(),
-    file_name=f"Planning_{nom_lot}.ics",
-    mime="text/calendar",
-    use_container_width=True,
-    type="primary"
+    file_name=f"AgnelPlan_{nom_lot}.ics",
+    mime="text/calendar"
 )
+
+if st.session_state.customs:
+    if st.button("Effacer les notes"):
+        st.session_state.customs = []
+        st.rerun()
